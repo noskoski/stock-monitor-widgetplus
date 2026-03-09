@@ -26,6 +26,10 @@
             <label>Data History Range</label>
             <default>1D</default>
         </entry>
+        <entry name="chartType" type="String">
+            <label>Chart Type</label>
+            <default>candlestick</default>
+        </entry>
 
         <entry name="limitHours" type="Bool">
             <label>Only update during specific hours</label>
@@ -54,6 +58,10 @@
         <entry name="hideChangePercentage" type="Bool">
             <label>Hide Stock Change Percentage (Panel View)</label>
             <default>false</default>
+        </entry>
+        <entry name="widgetTransparency" type="Int">
+            <label>Widget Background Transparency (%)</label>
+            <default>0</default>
         </entry>
     </group>
 </kcfg>

@@ -24,6 +24,7 @@ PlasmoidItem {
     property bool isMultiMode: Plasmoid.configuration.isMultiMode
     property string multiTickers: Plasmoid.configuration.multiTickers
     property string chartRange: Plasmoid.configuration.chartRange
+    property string chartType: Plasmoid.configuration.chartType || "candlestick"
 
     // Time Limits Config
     property bool limitHours: Plasmoid.configuration.limitHours
@@ -49,6 +50,7 @@ PlasmoidItem {
     property string lastUpdated: ""
     property string nextUpdate: ""
     property color bgColor: "#1a1a1a"
+    property int widgetTransparency: Plasmoid.configuration.widgetTransparency
 
     ListModel { id: stockModel }
 
@@ -156,7 +158,11 @@ PlasmoidItem {
         try {
             var result = json.chart.result[0];
             var meta = result.meta;
-            var quotes = result.indicators.quote[0].close;
+            var quoteData = result.indicators.quote[0];
+            var opens = quoteData.open || [];
+            var highs = quoteData.high || [];
+            var lows = quoteData.low || [];
+            var closes = quoteData.close || [];
             var timestamps = result.timestamp;
 
             root.singleCompanyName = meta.shortName || meta.longName || root.singleTicker;
@@ -176,15 +182,15 @@ PlasmoidItem {
             var cleanData = [];
             var startTime = (meta.currentTradingPeriod && meta.currentTradingPeriod.regular) ? meta.currentTradingPeriod.regular.start : 0;
             
-            for (var i = 0; i < quotes.length; i++) {
-                if (quotes[i] !== null) {
+            for (var i = 0; i < closes.length; i++) {
+                if (opens[i] !== null && highs[i] !== null && lows[i] !== null && closes[i] !== null) {
                     // Only show today's data if in 1D mode (2d range used for baseline)
                     if (root.chartRange === "1D" && startTime > 0) {
                         if (timestamps[i] >= startTime) {
-                            cleanData.push(quotes[i]);
+                            cleanData.push({ "open": opens[i], "high": highs[i], "low": lows[i], "close": closes[i] });
                         }
                     } else {
-                        cleanData.push(quotes[i]);
+                        cleanData.push({ "open": opens[i], "high": highs[i], "low": lows[i], "close": closes[i] });
                     }
                 }
             }
@@ -200,7 +206,11 @@ PlasmoidItem {
         try {
             var result = json.chart.result[0];
             var meta = result.meta;
-            var quotes = result.indicators.quote[0].close;
+            var quoteData = result.indicators.quote[0];
+            var opens = quoteData.open || [];
+            var highs = quoteData.high || [];
+            var lows = quoteData.low || [];
+            var closes = quoteData.close || [];
             var timestamps = result.timestamp;
 
             var current = meta.regularMarketPrice;
@@ -213,14 +223,14 @@ PlasmoidItem {
             var cleanData = [];
             var startTime = (meta.currentTradingPeriod && meta.currentTradingPeriod.regular) ? meta.currentTradingPeriod.regular.start : 0;
             
-            for (var i = 0; i < quotes.length; i++) {
-                if (quotes[i] !== null) {
+            for (var i = 0; i < closes.length; i++) {
+                if (opens[i] !== null && highs[i] !== null && lows[i] !== null && closes[i] !== null) {
                     if (root.chartRange === "1D" && startTime > 0) {
                         if (timestamps[i] >= startTime) {
-                            cleanData.push(quotes[i]);
+                            cleanData.push({ "open": opens[i], "high": highs[i], "low": lows[i], "close": closes[i] });
                         }
                     } else {
-                        cleanData.push(quotes[i]);
+                        cleanData.push({ "open": opens[i], "high": highs[i], "low": lows[i], "close": closes[i] });
                     }
                 }
             }
@@ -385,10 +395,14 @@ PlasmoidItem {
 
         Rectangle {
             anchors.fill: parent
-            color: root.bgColor
+            color: Qt.rgba(
+                root.bgColor.r,
+                root.bgColor.g,
+                root.bgColor.b,
+                1 - (Math.max(0, Math.min(root.widgetTransparency, 100)) / 100.0)
+            )
             anchors.margins: 10
             radius: 22
-            opacity: 1
 
             Text {
                 anchors.centerIn: parent
@@ -503,7 +517,11 @@ PlasmoidItem {
                             renderStrategy: Canvas.Threaded
                             renderTarget: Canvas.Image
                             onPaint: { drawChart(getContext("2d"), width, height, root.chartDataPoints, root.previousClose, root.isPositive, true); }
-                            Connections { target: root; function onChartDataPointsChanged() { singleCanvas.requestPaint(); } }
+                            Connections {
+                                target: root
+                                function onChartDataPointsChanged() { singleCanvas.requestPaint(); }
+                                function onChartTypeChanged() { singleCanvas.requestPaint(); }
+                            }
                         }
                     }
                     Text {
@@ -599,6 +617,10 @@ PlasmoidItem {
                                 onPaint: { drawChart(getContext("2d"), width, height, model.chartPoints, model.prevClose, model.isPos, false); }
                                 Component.onCompleted: sparkLine.requestPaint()
                                 Connections {
+                                    target: root
+                                    function onChartTypeChanged() { sparkLine.requestPaint(); }
+                                }
+                                Connections {
                                     target: stockModel
                                     function onDataChanged() { sparkLine.requestPaint() }
                                 }
@@ -662,8 +684,23 @@ PlasmoidItem {
     function drawChart(ctx, w, h, data, prevClose, isPos, drawBackground) {
         ctx.clearRect(0, 0, w, h);
         if (!data || data.length < 2) return;
-        var minVal = Math.min(...data);
-        var maxVal = Math.max(...data);
+        var isCandlestick = root.chartType === "candlestick";
+        var closes = data.map(function(point) {
+            return (typeof point === "number") ? point : point.close;
+        });
+        var minVal;
+        var maxVal;
+        if (isCandlestick) {
+            minVal = Math.min(...data.map(function(point) {
+                return (typeof point === "number") ? point : point.low;
+            }));
+            maxVal = Math.max(...data.map(function(point) {
+                return (typeof point === "number") ? point : point.high;
+            }));
+        } else {
+            minVal = Math.min(...closes);
+            maxVal = Math.max(...closes);
+        }
         var range = maxVal - minVal;
         if (range === 0) range = 1;
         var padding = range * (drawBackground ? 0.1 : 0.05);
@@ -684,28 +721,59 @@ PlasmoidItem {
             ctx.setLineDash([]);
         }
 
-        ctx.beginPath();
-        var stepX = w / (data.length - 1);
-        ctx.moveTo(0, getY(data[0]));
-        for (var i = 1; i < data.length; i++) {
-            ctx.lineTo(i * stepX, getY(data[i]));
-        }
+        if (isCandlestick) {
+            var candleStep = w / data.length;
+            var candleWidth = Math.max(2, candleStep * 0.6);
+            for (var j = 0; j < data.length; j++) {
+                var point = data[j];
+                var open = (typeof point === "number") ? point : point.open;
+                var high = (typeof point === "number") ? point : point.high;
+                var low = (typeof point === "number") ? point : point.low;
+                var close = (typeof point === "number") ? point : point.close;
+                var x = j * candleStep + (candleStep / 2);
+                var yOpen = getY(open);
+                var yClose = getY(close);
+                var yHigh = getY(high);
+                var yLow = getY(low);
+                var up = close >= open;
+                var candleColor = up ? root.positiveColor : root.negativeColor;
 
-        ctx.lineJoin = "round";
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = isPos ? root.positiveColor : root.negativeColor;
-        ctx.stroke();
+                ctx.beginPath();
+                ctx.strokeStyle = candleColor;
+                ctx.lineWidth = 1;
+                ctx.moveTo(x, yHigh);
+                ctx.lineTo(x, yLow);
+                ctx.stroke();
 
-        if (drawBackground) {
-            ctx.lineTo(w, h);
-            ctx.lineTo(0, h);
-            ctx.closePath();
-            var gradient = ctx.createLinearGradient(0, 0, 0, h);
-            var baseColor = isPos ? root.positiveColor : root.negativeColor;
-            gradient.addColorStop(0.0, Qt.rgba(baseColor.r, baseColor.g, baseColor.b, 0.3));
-            gradient.addColorStop(1.0, Qt.rgba(baseColor.r, baseColor.g, baseColor.b, 0.0));
-            ctx.fillStyle = gradient;
-            ctx.fill();
+                var bodyTop = Math.min(yOpen, yClose);
+                var bodyHeight = Math.max(1, Math.abs(yClose - yOpen));
+                ctx.fillStyle = candleColor;
+                ctx.fillRect(x - (candleWidth / 2), bodyTop, candleWidth, bodyHeight);
+            }
+        } else {
+            ctx.beginPath();
+            var stepX = w / (closes.length - 1);
+            ctx.moveTo(0, getY(closes[0]));
+            for (var i = 1; i < closes.length; i++) {
+                ctx.lineTo(i * stepX, getY(closes[i]));
+            }
+
+            ctx.lineJoin = "round";
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = isPos ? root.positiveColor : root.negativeColor;
+            ctx.stroke();
+
+            if (drawBackground && root.chartType === "area") {
+                ctx.lineTo(w, h);
+                ctx.lineTo(0, h);
+                ctx.closePath();
+                var gradient = ctx.createLinearGradient(0, 0, 0, h);
+                var baseColor = isPos ? root.positiveColor : root.negativeColor;
+                gradient.addColorStop(0.0, Qt.rgba(baseColor.r, baseColor.g, baseColor.b, 0.3));
+                gradient.addColorStop(1.0, Qt.rgba(baseColor.r, baseColor.g, baseColor.b, 0.0));
+                ctx.fillStyle = gradient;
+                ctx.fill();
+            }
         }
     }
 }

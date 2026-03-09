@@ -7,16 +7,16 @@
         "Email": ""
       },
       {
-        "Name": "Cenk Tekin",
-        "Email": ""
+        "Name": "Leandro A. Noskoski",
+        "Email": "leandro@alternativalinux.net"
       }
     ],
-    "Name": "Stock Monitor",
-    "Description": "Modernized stock monitor for KDE with badge UI and custom colors.",
+    "Name": "Stock Monitor plus",
+    "Description": "Modernized stock monitor for KDE with badge UI and custom colors. based on Cenk Tekin https://github.com/vpsone/stock-monitor-widget  ",
     "Icon": "/icon.png",
-    "Id": "com.vps.stockmonitor",
-    "Version": "1.1",
-    "Website": "https://github.com/vpsone/stock-monitor-widget",
+    "Id": "com.vps.stockmonitorplus",
+    "Version": "1.0",
+    "Website": "https://github.com/noskoski/stock-monitor-widgetplus",
     "License": "GPL-3.0+"
   },
   "X-Plasma-API-Minimum-Version": "6.0"

@@ -20,12 +20,24 @@ Item {
     property alias cfg_positiveColor: posColorButton.text
     property alias cfg_negativeColor: negColorButton.text
     property alias cfg_hideChangePercentage: hidePercentSwitch.checked
+    property alias cfg_widgetTransparency: widgetOpacitySpin.value
 
     property string cfg_chartRange
+    property string cfg_chartType
 
     onCfg_chartRangeChanged: {
         var idx = rangeCombo.indexOfValue(cfg_chartRange)
         if (idx >= 0) rangeCombo.currentIndex = idx
+    }
+
+    onCfg_chartTypeChanged: {
+        if (cfg_chartType === "line") {
+            chartTypeCombo.currentIndex = 1
+        } else if (cfg_chartType === "area") {
+            chartTypeCombo.currentIndex = 2
+        } else {
+            chartTypeCombo.currentIndex = 0
+        }
     }
 
     function searchSymbols(query) {
@@ -96,11 +108,42 @@ Item {
             }
         }
 
+        ComboBox {
+            id: chartTypeCombo
+            Kirigami.FormData.label: "Chart Type:"
+            model: ["Candlestick (Vela)", "Line", "Area"]
+            onActivated: {
+                if (currentIndex === 1) {
+                    configPage.cfg_chartType = "line"
+                } else if (currentIndex === 2) {
+                    configPage.cfg_chartType = "area"
+                } else {
+                    configPage.cfg_chartType = "candlestick"
+                }
+            }
+            Component.onCompleted: {
+                if (configPage.cfg_chartType === "line") {
+                    currentIndex = 1
+                } else if (configPage.cfg_chartType === "area") {
+                    currentIndex = 2
+                } else {
+                    currentIndex = 0
+                }
+            }
+        }
+
         SpinBox {
             id: intervalSpin
             Kirigami.FormData.label: "Refresh Interval (minutes):"
             from: 1
             to: 360
+        }
+
+        SpinBox {
+            id: widgetOpacitySpin
+            Kirigami.FormData.label: "Widget Transparency (%):"
+            from: 0
+            to: 100
         }
 
         CheckBox {
