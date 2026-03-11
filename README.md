@@ -16,7 +16,7 @@ A modern stock market widget for KDE Plasma 6. It pulls data from Yahoo Finance 
 ## Features
 
 - Single-stock and multi-stock display modes.
-- Multiple chart ranges: `1D`, `5D`, `1M`, `6M`, `YTD`, `1Y`, `5Y`, `Max`.
+- Multiple chart ranges: `1D`, `5D`, `15D`, `30D`, `1M`, `6M`, `YTD`, `1Y`, `5Y`, `Max`.
 - Multiple chart types: `Candlestick (Vela)`, `Line`, and `Area`.
 - Custom positive/negative colors.
 - Optional hide/show percentage change in panel view.

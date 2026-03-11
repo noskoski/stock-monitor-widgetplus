@@ -25,9 +25,20 @@ Item {
     property string cfg_chartRange
     property string cfg_chartType
 
+    function rangeSupportsCandlestick(rangeValue) {
+        return rangeValue === "15D" || rangeValue === "30D";
+    }
+
+    function enforceChartTypeForRange() {
+        if (cfg_chartType === "candlestick" && !rangeSupportsCandlestick(cfg_chartRange)) {
+            cfg_chartType = "line";
+        }
+    }
+
     onCfg_chartRangeChanged: {
         var idx = rangeCombo.indexOfValue(cfg_chartRange)
         if (idx >= 0) rangeCombo.currentIndex = idx
+        enforceChartTypeForRange()
     }
 
     onCfg_chartTypeChanged: {
@@ -100,11 +111,15 @@ Item {
         ComboBox {
             id: rangeCombo
             Kirigami.FormData.label: "Data Range:"
-            model: ["1D", "5D", "1M", "6M", "YTD", "1Y", "5Y", "Max"]
-            onActivated: configPage.cfg_chartRange = currentText
+            model: ["1D", "5D", "15D", "30D", "1M", "6M", "YTD", "1Y", "5Y", "Max"]
+            onActivated: {
+                configPage.cfg_chartRange = currentText
+                configPage.enforceChartTypeForRange()
+            }
             Component.onCompleted: {
                 var idx = indexOfValue(configPage.cfg_chartRange)
                 if (idx >= 0) currentIndex = idx
+                configPage.enforceChartTypeForRange()
             }
         }
 
@@ -118,7 +133,7 @@ Item {
                 } else if (currentIndex === 2) {
                     configPage.cfg_chartType = "area"
                 } else {
-                    configPage.cfg_chartType = "candlestick"
+                    configPage.cfg_chartType = configPage.rangeSupportsCandlestick(configPage.cfg_chartRange) ? "candlestick" : "line"
                 }
             }
             Component.onCompleted: {

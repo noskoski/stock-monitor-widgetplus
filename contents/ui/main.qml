@@ -51,6 +51,10 @@ PlasmoidItem {
     property string nextUpdate: ""
     property color bgColor: "#1a1a1a"
     property int widgetTransparency: Plasmoid.configuration.widgetTransparency
+    property bool chartHoverActive: false
+    property int chartHoverIndex: -1
+    property real chartHoverX: 0
+    property string chartHoverText: ""
 
     ListModel { id: stockModel }
 
@@ -65,6 +69,72 @@ PlasmoidItem {
         return symbols[code] || code + " ";
     }
 
+    function isCandlestickRange() {
+        return root.chartRange === "15D" || root.chartRange === "30D";
+    }
+
+    function getDailyPointLimit() {
+        if (root.chartRange === "15D") return 15;
+        if (root.chartRange === "30D") return 30;
+        return 0;
+    }
+
+    function formatHoverValue(value) {
+        if (value === undefined || value === null || isNaN(value)) return "--";
+        return root.currencySym + Number(value).toFixed(2);
+    }
+
+    function formatHoverTimestamp(ts) {
+        if (!ts) return "";
+        var d = new Date(ts * 1000);
+        if (root.chartRange === "1D" || root.chartRange === "5D" || root.chartRange === "1M") {
+            return Qt.formatDateTime(d, "dd/MM HH:mm");
+        }
+        return Qt.formatDate(d, "dd/MM/yyyy");
+    }
+
+    function clearChartHover() {
+        root.chartHoverActive = false;
+        root.chartHoverIndex = -1;
+        root.chartHoverText = "";
+    }
+
+    function updateChartHover(mouseX, chartWidth) {
+        if (!root.chartDataPoints || root.chartDataPoints.length < 1 || chartWidth <= 0) {
+            clearChartHover();
+            return;
+        }
+
+        var len = root.chartDataPoints.length;
+        var isCandle = root.chartType === "candlestick" && root.isCandlestickRange();
+        var idx = 0;
+
+        if (isCandle) {
+            var candleStep = chartWidth / len;
+            idx = Math.floor(mouseX / candleStep);
+        } else {
+            var stepX = (len > 1) ? chartWidth / (len - 1) : chartWidth;
+            idx = Math.round(mouseX / stepX);
+        }
+
+        idx = Math.max(0, Math.min(len - 1, idx));
+        var p = root.chartDataPoints[idx];
+        var ts = formatHoverTimestamp(p.timestamp);
+
+        root.chartHoverIndex = idx;
+        root.chartHoverX = Math.max(0, Math.min(chartWidth, mouseX));
+        if (isCandle) {
+            root.chartHoverText = (ts ? ts + "\n" : "")
+                + "O: " + formatHoverValue(p.open)
+                + "  H: " + formatHoverValue(p.high)
+                + "  L: " + formatHoverValue(p.low)
+                + "  C: " + formatHoverValue(p.close);
+        } else {
+            root.chartHoverText = (ts ? ts + "\n" : "") + "Close: " + formatHoverValue(p.close);
+        }
+        root.chartHoverActive = true;
+    }
+
     // --- NEW HELPER: GET API PARAMETERS BASED ON CONFIG ---
     function getApiParams() {
         // Yahoo Finance requires specific intervals for specific ranges
@@ -72,6 +142,8 @@ PlasmoidItem {
         switch (root.chartRange) {
             case "1D":  return "range=2d&interval=2m"; // Use 2d to get reliable previous close for indices
             case "5D":  return "range=5d&interval=15m";
+            case "15D": return "range=1mo&interval=1d";
+            case "30D": return "range=3mo&interval=1d";
             case "1M":  return "range=1mo&interval=60m"; // '1mo' is Yahoo syntax
             case "6M":  return "range=6mo&interval=1d";
             case "YTD": return "range=ytd&interval=1d";
@@ -187,12 +259,16 @@ PlasmoidItem {
                     // Only show today's data if in 1D mode (2d range used for baseline)
                     if (root.chartRange === "1D" && startTime > 0) {
                         if (timestamps[i] >= startTime) {
-                            cleanData.push({ "open": opens[i], "high": highs[i], "low": lows[i], "close": closes[i] });
+                            cleanData.push({ "open": opens[i], "high": highs[i], "low": lows[i], "close": closes[i], "timestamp": timestamps[i] });
                         }
                     } else {
-                        cleanData.push({ "open": opens[i], "high": highs[i], "low": lows[i], "close": closes[i] });
+                        cleanData.push({ "open": opens[i], "high": highs[i], "low": lows[i], "close": closes[i], "timestamp": timestamps[i] });
                     }
                 }
+            }
+            var dailyLimit = getDailyPointLimit();
+            if (dailyLimit > 0 && cleanData.length > dailyLimit) {
+                cleanData = cleanData.slice(cleanData.length - dailyLimit);
             }
             root.chartDataPoints = cleanData;
             var now = new Date();
@@ -227,12 +303,16 @@ PlasmoidItem {
                 if (opens[i] !== null && highs[i] !== null && lows[i] !== null && closes[i] !== null) {
                     if (root.chartRange === "1D" && startTime > 0) {
                         if (timestamps[i] >= startTime) {
-                            cleanData.push({ "open": opens[i], "high": highs[i], "low": lows[i], "close": closes[i] });
+                            cleanData.push({ "open": opens[i], "high": highs[i], "low": lows[i], "close": closes[i], "timestamp": timestamps[i] });
                         }
                     } else {
-                        cleanData.push({ "open": opens[i], "high": highs[i], "low": lows[i], "close": closes[i] });
+                        cleanData.push({ "open": opens[i], "high": highs[i], "low": lows[i], "close": closes[i], "timestamp": timestamps[i] });
                     }
                 }
+            }
+            var dailyLimit = getDailyPointLimit();
+            if (dailyLimit > 0 && cleanData.length > dailyLimit) {
+                cleanData = cleanData.slice(cleanData.length - dailyLimit);
             }
 
             var itemData = {
@@ -275,6 +355,8 @@ PlasmoidItem {
     onMultiTickersChanged: { stockModel.clear(); refreshData(); }
     // CHANGED: Update when range changes
     onChartRangeChanged: { stockModel.clear(); refreshData(); }
+    onChartTypeChanged: clearChartHover()
+    onChartDataPointsChanged: clearChartHover()
 
     // --- CUSTOM TOOLTIP ---
     // Tooltip removed due to compatibility issues across some Plasma 6 versions
@@ -330,7 +412,7 @@ PlasmoidItem {
                 RowLayout {
                     spacing: 4
                     Text {
-                        text: root.singleTicker.toUpperCase()
+                        text: root.singleTicker.toUpperCase() + " (" + root.chartRange + ")"
                         color: PlasmaCore.Theme.textColor
                         font.pixelSize: 9
                         font.weight: Font.Bold
@@ -462,7 +544,7 @@ PlasmoidItem {
                                     Layout.alignment: Qt.AlignVCenter
                                 }
                                 Text {
-                                    text: root.singleTicker
+                                    text: root.singleTicker + " (" + root.chartRange + ")"
                                     color: "white"
                                     font.bold: true
                                     font.pixelSize: 15
@@ -521,6 +603,37 @@ PlasmoidItem {
                                 target: root
                                 function onChartDataPointsChanged() { singleCanvas.requestPaint(); }
                                 function onChartTypeChanged() { singleCanvas.requestPaint(); }
+                            }
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            z: 220
+                            acceptedButtons: Qt.NoButton
+                            hoverEnabled: true
+                            onPositionChanged: (mouse) => root.updateChartHover(mouse.x, width)
+                            onEntered: (mouse) => root.updateChartHover(mouse.x, width)
+                            onExited: root.clearChartHover()
+                        }
+                        Rectangle {
+                            visible: root.chartHoverActive
+                            z: 221
+                            x: Math.max(0, Math.min(parent.width - width, root.chartHoverX - (width / 2)))
+                            y: 4
+                            radius: 6
+                            color: "#1f1f1f"
+                            border.color: "#4a4a4a"
+                            border.width: 1
+                            opacity: 0.96
+                            width: hoverText.implicitWidth + 12
+                            height: hoverText.implicitHeight + 8
+
+                            Text {
+                                id: hoverText
+                                anchors.centerIn: parent
+                                text: root.chartHoverText
+                                color: "#f0f0f0"
+                                font.pixelSize: 10
+                                horizontalAlignment: Text.AlignHCenter
                             }
                         }
                     }
@@ -591,7 +704,7 @@ PlasmoidItem {
                                     font.pixelSize: 10
                                 }
                                 Text {
-                                    text: model.ticker
+                                    text: model.ticker + " (" + root.chartRange + ")"
                                     color: "white"
                                     // font.bold: true
                                     font.pixelSize: 14
@@ -684,7 +797,7 @@ PlasmoidItem {
     function drawChart(ctx, w, h, data, prevClose, isPos, drawBackground) {
         ctx.clearRect(0, 0, w, h);
         if (!data || data.length < 2) return;
-        var isCandlestick = root.chartType === "candlestick";
+        var isCandlestick = root.chartType === "candlestick" && root.isCandlestickRange();
         var closes = data.map(function(point) {
             return (typeof point === "number") ? point : point.close;
         });
